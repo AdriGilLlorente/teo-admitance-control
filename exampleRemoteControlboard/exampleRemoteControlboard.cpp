@@ -31,6 +31,7 @@ make -j3
  *
  */
 
+#include <cmath>
 #include <cstdio>
 
 #include <vector>
@@ -41,9 +42,13 @@ make -j3
 
 #include <yarp/dev/PolyDriver.h>
 #include <yarp/dev/IControlMode.h>
-#include <yarp/dev/IEncodersTimed.h>
-#include <yarp/dev/IPositionControl.h>
-#include <yarp/dev/IVelocityControl.h>
+#include <yarp/dev/IEncoders.h>
+#include <yarp/dev/ITorqueControl.h>
+
+#define JOINT_ID 4
+#define LENGTH 1.0
+#define MASS 55.0
+#define GRAVITY 9.8
 
 int main(int argc, char *argv[])
 {
@@ -58,8 +63,8 @@ int main(int argc, char *argv[])
 
     yarp::os::Property options;
     options.put("device", "remote_controlboard");
-    options.put("remote", "/ravebot");
-    options.put("local", "/local");
+    options.put("remote", "/teo/rightLeg");
+    options.put("local", "/local/teo/rightLeg");
 
     yarp::dev::PolyDriver dd(options);
 
@@ -69,14 +74,12 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    yarp::dev::IPositionControl *pos;
-    yarp::dev::IVelocityControl *vel;
-    yarp::dev::IEncodersTimed *enc;
+    yarp::dev::ITorqueControl *torq;
+    yarp::dev::IEncoders *enc;
     yarp::dev::IControlMode *mode;
 
     bool ok = true;
-    ok &= dd.view(pos);
-    ok &= dd.view(vel);
+    ok &= dd.view(torq);
     ok &= dd.view(enc);
     ok &= dd.view(mode);
 
@@ -87,27 +90,23 @@ int main(int argc, char *argv[])
     } else std::printf("[success] testAsibot acquired robot interface\n");
 
     int axes;
-    pos->getAxes(&axes);
+    enc->getAxes(&axes);
 
-    std::vector<int> posModes(axes, VOCAB_CM_POSITION);
-    mode->setControlModes(posModes.data());
+    // hacer por rpc: set icmd cmod 4 torq
+    /*
+    std::vector<int> modes(axes, VOCAB_CM_POSITION);
+    modes[JOINT_ID] = VOCAB_CM_TORQUE;
+    mode->setControlModes(modes.data());
+    */
 
-    std::printf("test positionMove(1, 35.0)\n");
-    pos->positionMove(1, 35.0);
-
-    std::printf("Delaying 5 seconds...\n");
-    yarp::os::Time::delay(5.0);
-
-    std::vector<int> velModes(axes, VOCAB_CM_VELOCITY);
-    mode->setControlModes(velModes.data());
-
-    std::printf("test velocityMove(0, 10.0)\n");
-    vel->velocityMove(0, 10.0);
-
-    std::printf("Delaying 5 seconds...\n");
-    yarp::os::Time::delay(5.0);
-
-    vel->velocityMove(0, 0.0); // stop the robot
+    while (true)
+    {
+        double q;
+        enc->getEncoder(JOINT_ID, &q);
+        double t = (-1) * LENGTH * std::sin(q * M_PI / 180.0) * MASS * GRAVITY;
+        std::printf("t = %f\n", t);
+        yarp::os::Time::delay(0.1);
+    }
 
     return 0;
 }
